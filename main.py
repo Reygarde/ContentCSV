@@ -1,26 +1,23 @@
 import streamlit as st
-from langchain_community.vectorstores import FAISS
-from langchain_openai import OpenAI
-from langchain.document_loaders.csv_loader import CSVLoader
-from langchain_community.embeddings import OpenAIEmbeddings
+from langchain.vectorstores import FAISS
+from langchain.llms import OpenAI
+from langchain.document_loaders import CSVLoader
+from langchain.embeddings import OpenAIEmbeddings
 from langchain.prompts import PromptTemplate
 from langchain.chains import RetrievalQA
 import os
 
-#LLM and key loading function
+# LLM and key loading function
 def load_LLM(openai_api_key):
     """Logic for loading the chain you want to use should go here."""
-    # Make sure your openai_api_key is set as an environment variable
     llm = OpenAI(temperature=0, openai_api_key=openai_api_key)
     return llm
 
-
-#Page title and header
+# Page title and header
 st.set_page_config(page_title="Ask from CSV File with FAQs about Napoleon")
 st.header("Ask from CSV File with FAQs about Napoleon")
 
-
-#Input OpenAI API Key
+# Input OpenAI API Key
 def get_openai_api_key():
     input_text = st.text_input(
         label="OpenAI API Key ",  
@@ -31,11 +28,11 @@ def get_openai_api_key():
 
 openai_api_key = get_openai_api_key()
 
-
+# Check if the OpenAI API key is provided
 if openai_api_key:
     embedding = OpenAIEmbeddings(openai_api_key=openai_api_key)
 
-    vectordb_file_path = "my_vecdtordb"
+    vectordb_file_path = "my_vectordb"
 
     def create_db():
         loader = CSVLoader(file_path='napoleon-faqs.csv', source_column="prompt")
@@ -45,10 +42,14 @@ if openai_api_key:
         # Save vector database locally
         vectordb.save_local(vectordb_file_path)
 
-
     def execute_chain():
-        # Load the vector database from the local folder
-        vectordb = FAISS.load_local(vectordb_file_path, embedding)
+        # Check if vector database exists
+        if not os.path.exists(vectordb_file_path):
+            st.warning("Vector database not found. Creating a new one...")
+            create_db()
+        
+        # Load the vector database from the local folder with dangerous deserialization allowed
+        vectordb = FAISS.load_local(vectordb_file_path, embedding, allow_dangerous_deserialization=True)
 
         # Create a retriever for querying the vector database
         retriever = vectordb.as_retriever(score_threshold=0.7)
@@ -79,15 +80,16 @@ if openai_api_key:
 
         return chain
 
-
     if __name__ == "__main__":
-        create_db()
+        if not os.path.exists(vectordb_file_path):
+            create_db()
         chain = execute_chain()
 
-
+    # Button to re-create the database
     btn = st.button("Private button: re-create database")
     if btn:
         create_db()
+        st.success("Database re-created successfully.")
 
     question = st.text_input("Question: ")
 
